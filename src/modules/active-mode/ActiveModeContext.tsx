@@ -21,6 +21,10 @@ export type ActiveModeState = {
   setActivePrompt: (prompt: string) => void;
   activeIntervalMs: number;
   setActiveIntervalMs: (intervalMs: number) => void;
+  activeCaptureFps: number;
+  setActiveCaptureFps: (fps: number) => void;
+  activeFrameWindowMs: number;
+  setActiveFrameWindowMs: (windowMs: number) => void;
   requireVideoForActive: boolean;
   setRequireVideoForActive: (requireVideo: boolean) => void;
   runtimeStatus: ActiveRuntimeStatus;
@@ -31,6 +35,8 @@ const DEFAULT_ACTIVE_PROMPT =
   "Continuously describe the surroundings for a blind user. Focus on safety, navigation cues, people, movement, and important changes. Describe only clearly visible details from current camera input. If uncertain or view is unclear, say that explicitly. Keep responses short and practical.";
 
 const DEFAULT_INTERVAL_MS = 3000;
+const DEFAULT_CAPTURE_FPS = 2;
+const DEFAULT_FRAME_WINDOW_MS = 3000;
 
 const ActiveModeContext = createContext<ActiveModeState | undefined>(undefined);
 
@@ -45,6 +51,10 @@ export const ActiveModeProvider: FC<ActiveModeProviderProps> = ({
   const [activePrompt, setActivePrompt] = useState(DEFAULT_ACTIVE_PROMPT);
   const [activeIntervalMs, setActiveIntervalMs] =
     useState<number>(DEFAULT_INTERVAL_MS);
+  const [activeCaptureFps, setActiveCaptureFps] =
+    useState<number>(DEFAULT_CAPTURE_FPS);
+  const [activeFrameWindowMs, setActiveFrameWindowMs] =
+    useState<number>(DEFAULT_FRAME_WINDOW_MS);
   const [requireVideoForActive, setRequireVideoForActive] =
     useState<boolean>(true);
   const [runtimeStatus, setRuntimeStatus] =
@@ -58,6 +68,10 @@ export const ActiveModeProvider: FC<ActiveModeProviderProps> = ({
       setActivePrompt,
       activeIntervalMs,
       setActiveIntervalMs,
+      activeCaptureFps,
+      setActiveCaptureFps,
+      activeFrameWindowMs,
+      setActiveFrameWindowMs,
       requireVideoForActive,
       setRequireVideoForActive,
       runtimeStatus,
@@ -67,6 +81,8 @@ export const ActiveModeProvider: FC<ActiveModeProviderProps> = ({
       mode,
       activePrompt,
       activeIntervalMs,
+      activeCaptureFps,
+      activeFrameWindowMs,
       requireVideoForActive,
       runtimeStatus,
     ],

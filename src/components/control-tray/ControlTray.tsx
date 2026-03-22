@@ -22,6 +22,7 @@ import {
   RefObject,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -51,6 +52,11 @@ export type ControlTrayProps = {
   registerFrameSnapshotRequester?: (
     (requester: (() => Promise<FrameSnapshot | null>) | null) => void
   ) | undefined;
+  registerFrameWindowRequester?: (
+    (requester: (() => Promise<FrameSnapshot[]>) | null) => void
+  ) | undefined;
+  activeCaptureFps?: number;
+  activeFrameWindowMs?: number;
   enableEditingSettings?: boolean;
 };
 
@@ -85,6 +91,9 @@ function ControlTray({
   onVideoFrameSent = () => {},
   registerFrameRequester,
   registerFrameSnapshotRequester,
+  registerFrameWindowRequester,
+  activeCaptureFps = 2,
+  activeFrameWindowMs = 3000,
   supportsVideo,
   enableEditingSettings,
 }: ControlTrayProps) {
@@ -97,6 +106,21 @@ function ControlTray({
   const [muted, setMuted] = useState(false);
   const renderCanvasRef = useRef<HTMLCanvasElement>(null);
   const connectButtonRef = useRef<HTMLButtonElement>(null);
+  const frameBufferRef = useRef<FrameSnapshot[]>([]);
+
+  const safeCaptureFps = Math.max(1, activeCaptureFps);
+  const safeFrameWindowMs = Math.max(1000, activeFrameWindowMs);
+  const frameCaptureIntervalMs = Math.max(
+    100,
+    Math.round(1000 / safeCaptureFps),
+  );
+  const frameKeyframeCount = useMemo(() => {
+    const estimatedFrameCount = Math.max(
+      3,
+      Math.round((safeFrameWindowMs / 1000) * safeCaptureFps),
+    );
+    return Math.min(8, estimatedFrameCount);
+  }, [safeFrameWindowMs, safeCaptureFps]);
 
   const { client, connected, connect, disconnect, volume } =
     useLiveAPIContext();
@@ -135,6 +159,42 @@ function ControlTray({
     };
   }, [connected, client, muted, audioRecorder]);
 
+  const pruneFrameBuffer = useCallback(
+    (nowMs: number) => {
+      frameBufferRef.current = frameBufferRef.current.filter(
+        (frame) => nowMs - frame.timestampMs <= safeFrameWindowMs,
+      );
+    },
+    [safeFrameWindowMs],
+  );
+
+  const pushFrameBuffer = useCallback(
+    (snapshot: FrameSnapshot) => {
+      frameBufferRef.current = [...frameBufferRef.current, snapshot];
+      pruneFrameBuffer(snapshot.timestampMs);
+    },
+    [pruneFrameBuffer],
+  );
+
+  const selectKeyframes = useCallback(
+    (frames: FrameSnapshot[]): FrameSnapshot[] => {
+      if (frames.length <= frameKeyframeCount) {
+        return frames;
+      }
+
+      const maxIndex = frames.length - 1;
+      const rawIndices = Array.from({ length: frameKeyframeCount }, (_, idx) =>
+        Math.floor((idx * maxIndex) / (frameKeyframeCount - 1)),
+      );
+      const uniqueIndices = Array.from(new Set(rawIndices)).sort(
+        (a, b) => a - b,
+      );
+
+      return uniqueIndices.map((index) => frames[index]);
+    },
+    [frameKeyframeCount],
+  );
+
   const captureFrameData = useCallback((): FrameSnapshot | null => {
     const video = videoRef.current;
     const canvas = renderCanvasRef.current;
@@ -143,7 +203,11 @@ function ControlTray({
       return null;
     }
 
-    if (video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
+    if (
+      video.readyState < 2 ||
+      video.videoWidth === 0 ||
+      video.videoHeight === 0
+    ) {
       return null;
     }
 
@@ -176,10 +240,11 @@ function ControlTray({
       return null;
     }
 
+    pushFrameBuffer(snapshot);
     client.sendRealtimeInput([{ mimeType: "image/jpeg", data: snapshot.data }]);
     onVideoFrameSent(snapshot.timestampMs);
     return snapshot.timestampMs;
-  }, [client, onVideoFrameSent, captureFrameData]);
+  }, [client, onVideoFrameSent, captureFrameData, pushFrameBuffer]);
 
   useEffect(() => {
     if (!registerFrameRequester) {
@@ -204,6 +269,7 @@ function ControlTray({
       if (!snapshot) {
         return null;
       }
+      pushFrameBuffer(snapshot);
       onVideoFrameSent(snapshot.timestampMs);
       return snapshot;
     };
@@ -213,7 +279,39 @@ function ControlTray({
     return () => {
       registerFrameSnapshotRequester(null);
     };
-  }, [registerFrameSnapshotRequester, captureFrameData, onVideoFrameSent]);
+  }, [
+    registerFrameSnapshotRequester,
+    captureFrameData,
+    onVideoFrameSent,
+    pushFrameBuffer,
+  ]);
+
+  useEffect(() => {
+    if (!registerFrameWindowRequester) {
+      return;
+    }
+
+    const requester = async () => {
+      sendVideoFrameOnce();
+      pruneFrameBuffer(Date.now());
+      return selectKeyframes(frameBufferRef.current);
+    };
+
+    registerFrameWindowRequester(requester);
+
+    return () => {
+      registerFrameWindowRequester(null);
+    };
+  }, [
+    registerFrameWindowRequester,
+    sendVideoFrameOnce,
+    pruneFrameBuffer,
+    selectKeyframes,
+  ]);
+
+  useEffect(() => {
+    pruneFrameBuffer(Date.now());
+  }, [safeFrameWindowMs, pruneFrameBuffer]);
 
   useEffect(() => {
     if (videoRef.current) {
@@ -225,7 +323,10 @@ function ControlTray({
     function sendVideoFrameLoop() {
       sendVideoFrameOnce();
       if (connected) {
-        timeoutId = window.setTimeout(sendVideoFrameLoop, 1000 / 0.5);
+        timeoutId = window.setTimeout(
+          sendVideoFrameLoop,
+          frameCaptureIntervalMs,
+        );
       }
     }
 
@@ -236,7 +337,19 @@ function ControlTray({
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [connected, activeVideoStream, videoRef, sendVideoFrameOnce]);
+  }, [
+    connected,
+    activeVideoStream,
+    videoRef,
+    sendVideoFrameOnce,
+    frameCaptureIntervalMs,
+  ]);
+
+  useEffect(() => {
+    if (!activeVideoStream) {
+      frameBufferRef.current = [];
+    }
+  }, [activeVideoStream]);
 
   //handler for swapping from one video-stream to the next
   const changeStreams = (next?: UseMediaStreamResult) => async () => {

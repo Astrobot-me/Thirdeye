@@ -17,6 +17,10 @@ export default function ActiveModeControls() {
     setMode,
     activeIntervalMs,
     setActiveIntervalMs,
+    activeCaptureFps,
+    setActiveCaptureFps,
+    activeFrameWindowMs,
+    setActiveFrameWindowMs,
     requireVideoForActive,
     setRequireVideoForActive,
     runtimeStatus,
@@ -28,6 +32,22 @@ export default function ActiveModeControls() {
       return;
     }
     setActiveIntervalMs(Math.max(1000, nextValue));
+  };
+
+  const updateCaptureFps = (event: ChangeEvent<HTMLInputElement>) => {
+    const nextValue = Number.parseInt(event.target.value, 10);
+    if (Number.isNaN(nextValue)) {
+      return;
+    }
+    setActiveCaptureFps(Math.max(1, Math.min(10, nextValue)));
+  };
+
+  const updateFrameWindowMs = (event: ChangeEvent<HTMLInputElement>) => {
+    const nextValue = Number.parseInt(event.target.value, 10);
+    if (Number.isNaN(nextValue)) {
+      return;
+    }
+    setActiveFrameWindowMs(Math.max(1000, Math.min(10000, nextValue)));
   };
 
   const badgeClass = runtimeStatus.replaceAll("_", "-");
@@ -71,6 +91,30 @@ export default function ActiveModeControls() {
             step={500}
             value={activeIntervalMs}
             onChange={updateInterval}
+            disabled={!connected || mode !== "active"}
+          />
+        </label>
+        <label>
+          Capture FPS
+          <input
+            type="number"
+            min={1}
+            max={10}
+            step={1}
+            value={activeCaptureFps}
+            onChange={updateCaptureFps}
+            disabled={!connected || mode !== "active"}
+          />
+        </label>
+        <label>
+          Window (ms)
+          <input
+            type="number"
+            min={1000}
+            max={10000}
+            step={500}
+            value={activeFrameWindowMs}
+            onChange={updateFrameWindowMs}
             disabled={!connected || mode !== "active"}
           />
         </label>

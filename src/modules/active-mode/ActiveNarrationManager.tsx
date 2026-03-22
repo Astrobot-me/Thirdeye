@@ -6,8 +6,7 @@ import { useActiveModeContext } from "./ActiveModeContext";
 type ActiveNarrationManagerProps = {
   hasVideoStream: boolean;
   lastVideoFrameAt: number | null;
-  requestFreshFrame: () => Promise<number | null>;
-  requestFreshFrameSnapshot: () => Promise<FrameSnapshot | null>;
+  requestFrameWindow: () => Promise<FrameSnapshot[]>;
 };
 
 const FRAME_FRESHNESS_WINDOW_MS = 4500;
@@ -16,8 +15,7 @@ const STALE_RETRY_MS = 350;
 export default function ActiveNarrationManager({
   hasVideoStream,
   lastVideoFrameAt,
-  requestFreshFrame,
-  requestFreshFrameSnapshot,
+  requestFrameWindow,
 }: ActiveNarrationManagerProps) {
   const { client, connected } = useLiveAPIContext();
   const {
@@ -86,43 +84,42 @@ export default function ActiveNarrationManager({
         return;
       }
 
-      let snapshot: FrameSnapshot | null = null;
+      let keyframes: FrameSnapshot[] = [];
 
       if (requireVideoForActive) {
         setRuntimeStatus("requesting_frame");
-
-        // Kick realtime pipeline as fallback context path.
-        await requestFreshFrame();
-
-        // Capture a direct snapshot for inline turn grounding.
-        snapshot = await requestFreshFrameSnapshot();
+        keyframes = await requestFrameWindow();
 
         const latestFrameAt =
-          snapshot?.timestampMs ?? lastVideoFrameAtRef.current;
+          keyframes.length > 0
+            ? keyframes[keyframes.length - 1].timestampMs
+            : lastVideoFrameAtRef.current;
         const fresh = isFrameFresh(latestFrameAt);
 
-        if (!fresh || !snapshot) {
+        if (!fresh || keyframes.length === 0) {
           setRuntimeStatus("waiting_for_frame");
-          log("frame:stale-or-missing-inline-snapshot");
+          log("frame:stale-or-missing-keyframes");
           inFlightRef.current = false;
           schedule(STALE_RETRY_MS);
           return;
         }
 
-        log(`frame:inline ageMs=${Date.now() - (latestFrameAt as number)}`);
+        log(
+          `frame:keyframes=${keyframes.length} latestAgeMs=${Date.now() - (latestFrameAt as number)}`,
+        );
       }
 
       setRuntimeStatus("narrating");
-      const groundedPrompt = `${activePrompt}\nOnly describe what is clearly visible in the latest camera frame(s). If uncertain, explicitly say uncertainty. Do not guess unseen details.`;
+      const groundedPrompt = `${activePrompt}\nThe provided images are ordered oldest to newest over roughly the last 3 seconds. Use motion/change across frames for context. Only describe what is clearly visible in these images. If uncertain, explicitly say uncertainty. Do not guess unseen details.`;
 
-      if (snapshot) {
+      if (keyframes.length > 0) {
         client.send([
-          {
+          ...keyframes.map((frame) => ({
             inlineData: {
               mimeType: "image/jpeg",
-              data: snapshot.data,
+              data: frame.data,
             },
-          },
+          })),
           { text: groundedPrompt },
         ]);
       } else {
@@ -172,8 +169,7 @@ export default function ActiveNarrationManager({
     activeIntervalMs,
     requireVideoForActive,
     hasVideoStream,
-    requestFreshFrame,
-    requestFreshFrameSnapshot,
+    requestFrameWindow,
     setRuntimeStatus,
   ]);
 
