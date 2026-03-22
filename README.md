@@ -1,7 +1,11 @@
 # AudioPay: AI Navigation Assistant for Blind and Visually Impaired Users
 
+
+![alt text](image.png)
+
 AudioPay is an open-source, AI-powered assistive tool that works like smart glasses.
 It captures live visual context (webcam or screen), sends it to Google Gemini Live API, and returns spoken narration to help users understand surroundings in real time.
+
 
 [![Live API Demo](readme/thumbnail.png)](https://www.youtube.com/watch?v=J_q7JY1XxFE)
 
