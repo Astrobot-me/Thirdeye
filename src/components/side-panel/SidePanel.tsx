@@ -21,6 +21,7 @@ import { RiSidebarFoldLine, RiSidebarUnfoldLine } from "react-icons/ri";
 import Select from "react-select";
 import { useLiveAPIContext } from "../../contexts/LiveAPIContext";
 import { useLoggerStore } from "../../lib/store-logger";
+import { ActiveModeControls } from "../../modules/active-mode";
 import Logger, { LoggerFilterType } from "../logger/Logger";
 import "./side-panel.scss";
 
@@ -121,6 +122,12 @@ export default function SidePanel() {
             : `⏸️${open ? " Paused" : ""}`}
         </div>
       </section>
+
+      {/* Active mode module integration: comment out this block to remove mode controls. */}
+      <div className={cn({ hidden: !open })}>
+        <ActiveModeControls />
+      </div>
+
       <div className="side-panel-container" ref={loggerRef}>
         <Logger
           filter={(selectedOption?.value as LoggerFilterType) || "none"}

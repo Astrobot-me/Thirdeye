@@ -14,14 +14,20 @@
  * limitations under the License.
  */
 
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.scss";
 import { LiveAPIProvider } from "./contexts/LiveAPIContext";
 import SidePanel from "./components/side-panel/SidePanel";
 import { Altair } from "./components/altair/Altair";
-import ControlTray from "./components/control-tray/ControlTray";
+import ControlTray, {
+  FrameSnapshot,
+} from "./components/control-tray/ControlTray";
 import cn from "classnames";
 import { LiveClientOptions } from "./types";
+import {
+  ActiveModeProvider,
+  ActiveNarrationManager,
+} from "./modules/active-mode";
 
 const API_KEY = process.env.REACT_APP_GEMINI_API_KEY as string;
 if (typeof API_KEY !== "string") {
@@ -38,36 +44,90 @@ function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
   // either the screen capture, the video or null, if null we hide it
   const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
+  const [lastVideoFrameAt, setLastVideoFrameAt] = useState<number | null>(null);
+  const frameRequesterRef = useRef<null | (() => Promise<number | null>)>(null);
+  const frameSnapshotRequesterRef =
+    useRef<null | (() => Promise<FrameSnapshot | null>)>(null);
+
+  const registerFrameRequester = useCallback(
+    (requester: (() => Promise<number | null>) | null) => {
+      frameRequesterRef.current = requester;
+    },
+    [],
+  );
+
+  const registerFrameSnapshotRequester = useCallback(
+    (requester: (() => Promise<FrameSnapshot | null>) | null) => {
+      frameSnapshotRequesterRef.current = requester;
+    },
+    [],
+  );
+
+  const requestFreshFrame = useCallback(async (): Promise<number | null> => {
+    if (!frameRequesterRef.current) {
+      return null;
+    }
+    return frameRequesterRef.current();
+  }, []);
+
+  const requestFreshFrameSnapshot = useCallback(
+    async (): Promise<FrameSnapshot | null> => {
+      if (!frameSnapshotRequesterRef.current) {
+        return null;
+      }
+      return frameSnapshotRequesterRef.current();
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!videoStream) {
+      setLastVideoFrameAt(null);
+    }
+  }, [videoStream]);
 
   return (
     <div className="App">
       <LiveAPIProvider options={apiOptions}>
-        <div className="streaming-console">
-          <SidePanel />
-          <main>
-            <div className="main-app-area">
-              {/* APP goes here */}
-              <Altair />
-              <video
-                className={cn("stream", {
-                  hidden: !videoRef.current || !videoStream,
-                })}
-                ref={videoRef}
-                autoPlay
-                playsInline
-              />
-            </div>
+        {/* Active mode module integration start */}
+        <ActiveModeProvider>
+          <div className="streaming-console">
+            <SidePanel />
+            <main>
+              <div className="main-app-area">
+                {/* APP goes here */}
+                <Altair />
+                <video
+                  className={cn("stream", {
+                    hidden: !videoRef.current || !videoStream,
+                  })}
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                />
+              </div>
 
-            <ControlTray
-              videoRef={videoRef}
-              supportsVideo={true}
-              onVideoStreamChange={setVideoStream}
-              enableEditingSettings={true}
-            >
-              {/* put your own buttons here */}
-            </ControlTray>
-          </main>
-        </div>
+              <ControlTray
+                videoRef={videoRef}
+                supportsVideo={true}
+                onVideoStreamChange={setVideoStream}
+                onVideoFrameSent={setLastVideoFrameAt}
+                registerFrameRequester={registerFrameRequester}
+                registerFrameSnapshotRequester={registerFrameSnapshotRequester}
+                enableEditingSettings={true}
+              >
+                {/* put your own buttons here */}
+              </ControlTray>
+            </main>
+          </div>
+          <ActiveNarrationManager
+            hasVideoStream={Boolean(videoStream)}
+            lastVideoFrameAt={lastVideoFrameAt}
+            requestFreshFrame={requestFreshFrame}
+            requestFreshFrameSnapshot={requestFreshFrameSnapshot}
+          />
+        </ActiveModeProvider>
+        {/* Active mode module integration end */}
       </LiveAPIProvider>
     </div>
   );
