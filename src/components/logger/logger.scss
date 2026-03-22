@@ -49,6 +49,19 @@
       color: var(--Neutral-90);
       border-radius: 8px;
     }
+
+    .part.part-inlinedata,
+    .part.part-realtime-media {
+      .frame-preview {
+        margin-top: 10px;
+        border-radius: 6px;
+        border: 1px solid var(--Neutral-20);
+        max-width: 240px;
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+    }
   }
 
   .plain-log {

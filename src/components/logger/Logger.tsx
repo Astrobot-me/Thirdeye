@@ -23,6 +23,7 @@ import SyntaxHighlighter from "react-syntax-highlighter";
 import { vs2015 as dark } from "react-syntax-highlighter/dist/esm/styles/hljs";
 import {
   ClientContentLog as ClientContentLogType,
+  RealtimeInputLog as RealtimeInputLogType,
   StreamingLog,
 } from "../../types";
 import {
@@ -117,9 +118,17 @@ const RenderPart = memo(({ part }: { part: Part }) => {
     );
   }
   if (part.inlineData) {
+    const isImage = part.inlineData.mimeType?.startsWith("image/");
     return (
       <div className="part part-inlinedata">
         <h5>Inline Data: {part.inlineData?.mimeType}</h5>
+        {isImage && part.inlineData.data ? (
+          <img
+            className="frame-preview"
+            src={`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`}
+            alt="sent frame"
+          />
+        ) : null}
       </div>
     );
   }
@@ -207,6 +216,31 @@ const ModelTurnLog = ({ message }: Message): JSX.Element => {
   );
 };
 
+const RealtimeInputLog = ({ message }: Message): JSX.Element => {
+  const payload = message as RealtimeInputLogType;
+  return (
+    <div className="rich-log realtime-input">
+      <h4>Realtime Input ({payload.summary})</h4>
+      {payload.media.map((item, idx) => {
+        const isImage = item.mimeType.startsWith("image/");
+        return (
+          <div key={`rt-media-${idx}`} className="part part-realtime-media">
+            <h5>{item.mimeType}</h5>
+            <p>{item.sizeBytes} bytes</p>
+            {isImage && item.data ? (
+              <img
+                className="frame-preview"
+                src={`data:${item.mimeType};base64,${item.data}`}
+                alt={`realtime frame ${idx + 1}`}
+              />
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 const CustomPlainTextLog = (msg: string) => () =>
   <PlainTextMessage message={msg} />;
 
@@ -244,6 +278,9 @@ const component = (log: StreamingLog) => {
   }
   if ("functionResponses" in log.message) {
     return ToolResponseLog;
+  }
+  if ("kind" in log.message && log.message.kind === "realtimeInput") {
+    return RealtimeInputLog;
   }
   if ("serverContent" in log.message) {
     const { serverContent } = log.message;

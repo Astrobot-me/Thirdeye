@@ -34,6 +34,7 @@ export type StreamingLog = {
   message:
     | string
     | ClientContentLog
+    | RealtimeInputLog
     | Omit<LiveServerMessage, "text" | "data">
     | LiveClientToolResponse;
 };
@@ -41,4 +42,14 @@ export type StreamingLog = {
 export type ClientContentLog = {
   turns: Part[];
   turnComplete: boolean;
+};
+
+export type RealtimeInputLog = {
+  kind: "realtimeInput";
+  summary: string;
+  media: Array<{
+    mimeType: string;
+    sizeBytes: number;
+    data?: string;
+  }>;
 };

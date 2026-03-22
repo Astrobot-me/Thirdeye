@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import { SYSTEM_PROMPT } from "../contants"
 import {
   Content,
   GoogleGenAI,
@@ -30,7 +31,7 @@ import {
 
 import { EventEmitter } from "eventemitter3";
 import { difference } from "lodash";
-import { LiveClientOptions, StreamingLog } from "../types";
+import { LiveClientOptions, RealtimeInputLog, StreamingLog } from "../types";
 import { base64ToArrayBuffer } from "./utils";
 
 /**
@@ -116,8 +117,9 @@ export class GenAILiveClient extends EventEmitter<LiveClientEventTypes> {
       return false;
     }
 
+    config = { ...config , systemInstruction  :SYSTEM_PROMPT}
     this._status = "connecting";
-    this.config = config;
+    this.config = config; 
     this._model = model;
 
     const callbacks: LiveCallbacks = {
@@ -245,8 +247,14 @@ export class GenAILiveClient extends EventEmitter<LiveClientEventTypes> {
   sendRealtimeInput(chunks: Array<{ mimeType: string; data: string }>) {
     let hasAudio = false;
     let hasVideo = false;
+    const media: RealtimeInputLog["media"] = [];
     for (const ch of chunks) {
       this.session?.sendRealtimeInput({ media: ch });
+      media.push({
+        mimeType: ch.mimeType,
+        sizeBytes: Math.floor((ch.data.length * 3) / 4),
+        data: ch.mimeType.includes("image") ? ch.data : undefined,
+      });
       if (ch.mimeType.includes("audio")) {
         hasAudio = true;
       }
@@ -265,7 +273,11 @@ export class GenAILiveClient extends EventEmitter<LiveClientEventTypes> {
           : hasVideo
             ? "video"
             : "unknown";
-    this.log(`client.realtimeInput`, message);
+    this.log(`client.realtimeInput`, {
+      kind: "realtimeInput",
+      summary: message,
+      media,
+    });
   }
 
   /**
