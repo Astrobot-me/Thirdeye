@@ -7,7 +7,7 @@ This repository contains a react-based starter app for using the [Live API](<[ht
 Watch the demo of the Live API [here](https://www.youtube.com/watch?v=J_q7JY1XxFE).
 
 ## Usage
-
+  
 To get started, [create a free Gemini API key](https://aistudio.google.com/apikey) and add it to the `.env` file. Then:
 
 ```

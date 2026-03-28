@@ -16,9 +16,12 @@
 
 import { createContext, FC, ReactNode, useContext } from "react";
 import { useLiveAPI, UseLiveAPIResults } from "../hooks/use-live-api";
+import { useModeController, UseModeControllerResults } from "../hooks/useModeController";
 import { LiveClientOptions } from "../types";
 
-const LiveAPIContext = createContext<UseLiveAPIResults | undefined>(undefined);
+export type LiveAPIContextValue = UseLiveAPIResults & UseModeControllerResults;
+
+const LiveAPIContext = createContext<LiveAPIContextValue | undefined>(undefined);
 
 export type LiveAPIProviderProps = {
   children: ReactNode;
@@ -30,9 +33,15 @@ export const LiveAPIProvider: FC<LiveAPIProviderProps> = ({
   children,
 }) => {
   const liveAPI = useLiveAPI(options);
+  const modeController = useModeController();
+
+  const contextValue: LiveAPIContextValue = {
+    ...liveAPI,
+    ...modeController,
+  };
 
   return (
-    <LiveAPIContext.Provider value={liveAPI}>
+    <LiveAPIContext.Provider value={contextValue}>
       {children}
     </LiveAPIContext.Provider>
   );

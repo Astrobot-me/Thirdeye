@@ -74,8 +74,9 @@ function ControlTray({
   const [muted, setMuted] = useState(false);
   const renderCanvasRef = useRef<HTMLCanvasElement>(null);
   const connectButtonRef = useRef<HTMLButtonElement>(null);
+  const videoStreamingRef = useRef(true);
 
-  const { client, connected, connect, disconnect, volume } =
+  const { client, connected, connect, disconnect, volume, mode, toggleMode, updateLastAudioEndTime, setConfig } =
     useLiveAPIContext();
 
   useEffect(() => {
@@ -112,6 +113,119 @@ function ControlTray({
     };
   }, [connected, client, muted, audioRecorder]);
 
+  // Handle mode switching with system prompt update
+  useEffect(() => {
+    if (!connected) return;
+
+    const { ACTIVE_MODE_SYSTEM_PROMPT, PASSIVE_MODE_SYSTEM_PROMPT } = require(
+      "../../lib/active-mode-prompt"
+    );
+
+    const systemPrompt =
+      mode === "active"
+        ? ACTIVE_MODE_SYSTEM_PROMPT
+        : PASSIVE_MODE_SYSTEM_PROMPT;
+
+    const toolDeclarations: any =
+      mode === "active"
+        ? [
+            {
+              name: "announce_hazard",
+              description: "Alert about hazards or obstacles in the environment",
+              parameters: {
+                type: "OBJECT",
+                properties: {
+                  type: {
+                    description: "Type of hazard (e.g., obstacle, step, moving object)",
+                    type: "STRING",
+                  },
+                  direction: {
+                    description: "Spatial direction of the hazard",
+                    type: "STRING",
+                  },
+                  urgency: {
+                    description: "Urgency level of the warning",
+                    type: "STRING",
+                  },
+                },
+                required: ["type", "direction", "urgency"],
+              },
+            },
+            {
+              name: "describe_person",
+              description: "Describe a person in the user's vicinity",
+              parameters: {
+                type: "OBJECT",
+                properties: {
+                  distance: {
+                    description: "Approximate distance in meters",
+                    type: "STRING",
+                  },
+                  direction: {
+                    description: "Spatial direction relative to user",
+                    type: "STRING",
+                  },
+                  emotion: {
+                    description: "Perceived emotional state",
+                    type: "STRING",
+                  },
+                },
+                required: ["distance", "direction", "emotion"],
+              },
+            },
+            {
+              name: "read_text",
+              description: "Read visible text from the environment",
+              parameters: {
+                type: "OBJECT",
+                properties: {
+                  content: {
+                    description: "The text content",
+                    type: "STRING",
+                  },
+                  source: {
+                    description: "Type of text source",
+                    type: "STRING",
+                  },
+                },
+                required: ["content", "source"],
+              },
+            },
+            {
+              name: "navigation_cue",
+              description: "Provide navigation instruction",
+              parameters: {
+                type: "OBJECT",
+                properties: {
+                  instruction: {
+                    description:
+                      "Navigation instruction (e.g., 'Turn left', 'Continue straight')",
+                    type: "STRING",
+                  },
+                },
+                required: ["instruction"],
+              },
+            },
+          ]
+        : [];
+
+    const newConfig: any = {
+      systemInstruction: {
+        parts: [{ text: systemPrompt }],
+      },
+    };
+
+    if (toolDeclarations.length > 0) {
+      newConfig.tools = [{ functionDeclarations: toolDeclarations }];
+    }
+
+    // Update the configuration
+    setConfig(newConfig);
+
+    // Send a mode change message to flush context
+    client.send({ text: `Mode changed to ${mode} mode.` }, false);
+  }, [mode, connected, client, setConfig]);
+
   useEffect(() => {
     if (videoRef.current) {
       videoRef.current.srcObject = activeVideoStream;
@@ -127,15 +241,19 @@ function ControlTray({
         return;
       }
 
-      const ctx = canvas.getContext("2d")!;
-      canvas.width = video.videoWidth * 0.25;
-      canvas.height = video.videoHeight * 0.25;
-      if (canvas.width + canvas.height > 0) {
-        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-        const base64 = canvas.toDataURL("image/jpeg", 1.0);
-        const data = base64.slice(base64.indexOf(",") + 1, Infinity);
-        client.sendRealtimeInput([{ mimeType: "image/jpeg", data }]);
+      // Only send video frames if in Active mode
+      if (mode === "active" && videoStreamingRef.current) {
+        const ctx = canvas.getContext("2d")!;
+        canvas.width = video.videoWidth * 0.25;
+        canvas.height = video.videoHeight * 0.25;
+        if (canvas.width + canvas.height > 0) {
+          ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+          const base64 = canvas.toDataURL("image/jpeg", 1.0);
+          const data = base64.slice(base64.indexOf(",") + 1, Infinity);
+          client.sendRealtimeInput([{ mimeType: "image/jpeg", data }]);
+        }
       }
+
       if (connected) {
         timeoutId = window.setTimeout(sendVideoFrame, 1000 / 0.5);
       }
@@ -146,7 +264,69 @@ function ControlTray({
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [connected, activeVideoStream, client, videoRef]);
+  }, [connected, activeVideoStream, client, videoRef, mode]);
+
+  // Handle tool calls from Gemini when in Active mode
+  useEffect(() => {
+    if (!connected || mode !== "active") return;
+
+    const onToolCall = (toolCall: any) => {
+      const toolName = toolCall.name;
+      const toolArgs = toolCall.args;
+
+      let responseContent = "";
+
+      switch (toolName) {
+        case "announce_hazard":
+          responseContent = `Hazard announced: ${toolArgs.type} to the ${toolArgs.direction}, urgency: ${toolArgs.urgency}`;
+          console.log("Tool - Announce Hazard:", toolArgs);
+          break;
+        case "describe_person":
+          responseContent = `Person described: ${toolArgs.distance}m ${toolArgs.direction}, emotion: ${toolArgs.emotion}`;
+          console.log("Tool - Describe Person:", toolArgs);
+          break;
+        case "read_text":
+          responseContent = `Text read: "${toolArgs.content}" from ${toolArgs.source}`;
+          console.log("Tool - Read Text:", toolArgs);
+          break;
+        case "navigation_cue":
+          responseContent = `Navigation: ${toolArgs.instruction}`;
+          console.log("Tool - Navigation Cue:", toolArgs);
+          break;
+        default:
+          responseContent = `Tool ${toolName} executed`;
+      }
+
+      // Send tool response back to Gemini
+      client.sendToolResponse({
+        functionResponses: [
+          {
+            response: { result: responseContent },
+            id: toolCall.id,
+          },
+        ],
+      });
+    };
+
+    client.on("toolcall", onToolCall);
+    return () => {
+      client.off("toolcall", onToolCall);
+    };
+  }, [connected, client, mode]);
+
+  // Track audio events for speech gate
+  useEffect(() => {
+    if (!connected || mode !== "active") return;
+
+    const onAudio = () => {
+      updateLastAudioEndTime(Date.now());
+    };
+
+    client.on("audio", onAudio);
+    return () => {
+      client.off("audio", onAudio);
+    };
+  }, [connected, client, mode, updateLastAudioEndTime]);
 
   //handler for swapping from one video-stream to the next
   const changeStreams = (next?: UseMediaStreamResult) => async () => {
@@ -180,6 +360,17 @@ function ControlTray({
         <div className="action-button no-action outlined">
           <AudioPulse volume={volume} active={connected} hover={false} />
         </div>
+
+        <button
+          className={cn("action-button mode-toggle", { active: mode === "active" })}
+          onClick={toggleMode}
+          aria-label={`Switch to ${mode === "passive" ? "active" : "passive"} mode`}
+          title={`${mode === "passive" ? "Passive" : "Active"} mode`}
+        >
+          <span className="mode-label">
+            {mode === "passive" ? "📝" : "👁️"}
+          </span>
+        </button>
 
         {supportsVideo && (
           <>

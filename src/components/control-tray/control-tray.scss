@@ -103,6 +103,41 @@
   }
 }
 
+.mode-toggle {
+  background: var(--Neutral-20);
+  color: var(--Neutral-60);
+
+  &:focus {
+    border: 2px solid var(--Neutral-20);
+    outline: 2px solid var(--Neutral-80);
+  }
+
+  &:hover {
+    background: var(--Neutral-30);
+  }
+
+  &.active {
+    background: var(--Blue-600);
+    color: var(--Blue-100);
+    animation: mode-pulse 2s ease-in-out infinite;
+  }
+
+  .mode-label {
+    font-size: 1.5rem;
+    line-height: 1;
+  }
+}
+
+@keyframes mode-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(66, 133, 244, 0.7);
+  }
+
+  50% {
+    box-shadow: 0 0 0 8px rgba(66, 133, 244, 0);
+  }
+}
+
 .control-tray {
   position: absolute;
   bottom: 0;
