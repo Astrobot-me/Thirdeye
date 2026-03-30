@@ -16,12 +16,14 @@
 
 import cn from "classnames";
 
-import { memo, ReactNode, RefObject, useEffect, useRef, useState } from "react";
+import { memo, ReactNode, RefObject, useCallback, useEffect, useRef, useState } from "react";
+import { Modality } from "@google/genai";
 import { useLiveAPIContext } from "../../contexts/LiveAPIContext";
 import { UseMediaStreamResult } from "../../hooks/use-media-stream-mux";
 import { useScreenCapture } from "../../hooks/use-screen-capture";
 import { useWebcam } from "../../hooks/use-webcam";
 import { AudioRecorder } from "../../lib/audio-recorder";
+import { ACTIVE_MODE_SYSTEM_PROMPT, PASSIVE_MODE_SYSTEM_PROMPT } from "../../lib/active-mode-prompt";
 import AudioPulse from "../audio-pulse/AudioPulse";
 import "./control-tray.scss";
 import SettingsDialog from "../settings-dialog/SettingsDialog";
@@ -75,9 +77,12 @@ function ControlTray({
   const renderCanvasRef = useRef<HTMLCanvasElement>(null);
   const connectButtonRef = useRef<HTMLButtonElement>(null);
   const videoStreamingRef = useRef(true);
+  const isReconnectingRef = useRef(false);
 
-  const { client, connected, connect, disconnect, volume, mode, toggleMode, updateLastAudioEndTime, setConfig } =
+  const { client, connected, connect, disconnect, volume, mode, toggleMode, updateLastAudioEndTime, setConfig, config } =
     useLiveAPIContext();
+
+  const previousModeRef = useRef(mode);
 
   useEffect(() => {
     if (!connected && connectButtonRef.current) {
@@ -113,14 +118,8 @@ function ControlTray({
     };
   }, [connected, client, muted, audioRecorder]);
 
-  // Handle mode switching with system prompt update
-  useEffect(() => {
-    if (!connected) return;
-
-    const { ACTIVE_MODE_SYSTEM_PROMPT, PASSIVE_MODE_SYSTEM_PROMPT } = require(
-      "../../lib/active-mode-prompt"
-    );
-
+  // Build config based on current mode, preserving existing audio/voice settings
+  const buildModeConfig = useCallback(() => {
     const systemPrompt =
       mode === "active"
         ? ACTIVE_MODE_SYSTEM_PROMPT
@@ -209,7 +208,11 @@ function ControlTray({
           ]
         : [];
 
+    // Merge with existing config to preserve responseModalities, speechConfig, etc.
+    // Ensure audio modality is always set (required for Live API)
     const newConfig: any = {
+      ...config,
+      responseModalities: config.responseModalities || [Modality.AUDIO],
       systemInstruction: {
         parts: [{ text: systemPrompt }],
       },
@@ -217,14 +220,59 @@ function ControlTray({
 
     if (toolDeclarations.length > 0) {
       newConfig.tools = [{ functionDeclarations: toolDeclarations }];
+    } else {
+      // Remove tools in passive mode
+      delete newConfig.tools;
     }
 
-    // Update the configuration
-    setConfig(newConfig);
+    return newConfig;
+  }, [mode, config]);
 
-    // Send a mode change message to flush context
-    client.send({ text: `Mode changed to ${mode} mode.` }, false);
-  }, [mode, connected, client, setConfig]);
+  // Handle mode switching - reconnect to apply new config
+  useEffect(() => {
+    // Skip on initial render or if not connected
+    if (previousModeRef.current === mode) return;
+    previousModeRef.current = mode;
+
+    if (!connected || isReconnectingRef.current) return;
+
+    const reconnectWithNewMode = async () => {
+      isReconnectingRef.current = true;
+      
+      // Build and set the new config
+      const newConfig = buildModeConfig();
+      setConfig(newConfig);
+      
+      // Disconnect and reconnect to apply the new config
+      await disconnect();
+      
+      // Small delay to ensure state updates
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      await connect();
+      isReconnectingRef.current = false;
+    };
+
+    reconnectWithNewMode();
+  }, [mode, connected, disconnect, connect, setConfig, buildModeConfig]);
+
+  // Auto-start webcam when entering Active mode (if supported and no video active)
+  useEffect(() => {
+    if (mode === "active" && supportsVideo && !activeVideoStream && connected) {
+      webcam.start().then((stream) => {
+        setActiveVideoStream(stream);
+        onVideoStreamChange(stream);
+      }).catch((err) => {
+        console.warn("Could not auto-start webcam for Active mode:", err);
+      });
+    }
+  }, [mode, supportsVideo, activeVideoStream, connected, webcam, onVideoStreamChange]);
+
+  // Set initial config on mount based on mode
+  useEffect(() => {
+    const initialConfig = buildModeConfig();
+    setConfig(initialConfig);
+  }, [buildModeConfig, setConfig]);
 
   useEffect(() => {
     if (videoRef.current) {
@@ -344,6 +392,11 @@ function ControlTray({
 
   return (
     <section className="control-tray">
+      <div className={cn("mode-indicator", { active: mode === "active" })}>
+        <span className="mode-icon">{mode === "active" ? "👁️" : "📝"}</span>
+        <span className="mode-text">{mode === "active" ? "Active Mode" : "Passive Mode"}</span>
+        {mode === "active" && <span className="mode-status">• Live</span>}
+      </div>
       <canvas style={{ display: "none" }} ref={renderCanvasRef} />
       <nav className={cn("actions-nav", { disabled: !connected })}>
         <button

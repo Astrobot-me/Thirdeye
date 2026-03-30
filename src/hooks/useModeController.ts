@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 
 export type ModeType = "passive" | "active";
 
@@ -24,6 +24,7 @@ export interface UseModeControllerResults {
   lastAudioEndTime: number;
   updateLastAudioEndTime: (time: number) => void;
   canSpeakProactively: () => boolean;
+  setClient: (client: any) => void;
 }
 
 /**
@@ -37,6 +38,7 @@ export interface UseModeControllerResults {
 export function useModeController(): UseModeControllerResults {
   const [mode, setMode] = useState<ModeType>("passive");
   const lastAudioEndTimeRef = useRef<number>(0);
+  const clientRef = useRef<any>(null);
   const SPEECH_GATE_MS = 2000; // 2 seconds minimum between proactive utterances
 
   const toggleMode = useCallback(() => {
@@ -56,11 +58,24 @@ export function useModeController(): UseModeControllerResults {
     return timeSinceLastAudio >= SPEECH_GATE_MS;
   }, [mode]);
 
+  const setClient = useCallback((client: any) => {
+    clientRef.current = client;
+  }, []);
+
+  useEffect(() => {
+    if (mode !== 'active' || !clientRef.current) return;
+    const probe = setInterval(() => {
+      clientRef.current.send({ text: "Explain the received video frames and go by the system prompt" }, false);
+    }, 4000);
+    return () => clearInterval(probe);
+  }, [mode]);
+
   return {
     mode,
     toggleMode,
     lastAudioEndTime: lastAudioEndTimeRef.current,
     updateLastAudioEndTime,
     canSpeakProactively,
+    setClient,
   };
 }

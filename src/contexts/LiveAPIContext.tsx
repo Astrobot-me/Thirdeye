@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { createContext, FC, ReactNode, useContext } from "react";
+import { createContext, FC, ReactNode, useContext, useEffect } from "react";
 import { useLiveAPI, UseLiveAPIResults } from "../hooks/use-live-api";
 import { useModeController, UseModeControllerResults } from "../hooks/useModeController";
 import { LiveClientOptions } from "../types";
@@ -34,6 +34,13 @@ export const LiveAPIProvider: FC<LiveAPIProviderProps> = ({
 }) => {
   const liveAPI = useLiveAPI(options);
   const modeController = useModeController();
+
+  // Pass the client to mode controller so it can send periodic probes
+  useEffect(() => {
+    if (liveAPI.client) {
+      modeController.setClient(liveAPI.client);
+    }
+  }, [liveAPI.client, modeController]);
 
   const contextValue: LiveAPIContextValue = {
     ...liveAPI,
