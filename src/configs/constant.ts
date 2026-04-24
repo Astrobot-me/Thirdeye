@@ -1,4 +1,4 @@
-export const Model =  "gemini-3.1-flash-live-preview"
+export const Model = "gemini-2.5-flash-native-audio-preview-12-2025"
 
 
 export const SYSTEM_PROMPT_ACTIVE_MODE =  ` You are the eyes of a blind person. You are always watching through their camera. You must never be silent for more than 4 seconds

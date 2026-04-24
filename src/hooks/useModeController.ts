@@ -65,7 +65,7 @@ export function useModeController(): UseModeControllerResults {
   useEffect(() => {
     if (mode !== 'active' || !clientRef.current) return;
     const probe = setInterval(() => {
-      clientRef.current.send({ text: "Explain the received video frames and go by the system prompt" }, false);
+      clientRef.current.send([{ text: "Explain the received video frames and go by the system prompt" }]);
     }, 4000);
     return () => clearInterval(probe);
   }, [mode]);

@@ -1,10 +1,51 @@
 # Live API - Web Console
 
-This repository contains a react-based starter app for using the [Live API](<[https://ai.google.dev/gemini-api](https://ai.google.dev/api/multimodal-live)>) over a websocket. It provides modules for streaming audio playback, recording user media such as from a microphone, webcam or screen capture as well as a unified log view to aid in development of your application.
+This repository contains a React-based starter app for using the [Live API](https://ai.google.dev/api/multimodal-live) over a websocket. It provides modules for streaming audio playback, recording user media such as from a microphone, webcam or screen capture as well as a unified log view to aid in development of your application.
+
+This project includes **Third Eye** — an Active Mode feature that serves as an AI vision assistant for blind and visually impaired users through smart glasses.
 
 [![Live API Demo](readme/thumbnail.png)](https://www.youtube.com/watch?v=J_q7JY1XxFE)
 
 Watch the demo of the Live API [here](https://www.youtube.com/watch?v=J_q7JY1XxFE).
+
+## Third Eye — Active Mode for Accessibility
+
+Third Eye is an **Active Mode** feature that transforms the Live API into a proactive vision assistant for blind and visually impaired users. When enabled, it continuously watches through the camera and narrates the surroundings in real-time.
+
+### How It Works
+
+When you switch to **Active Mode**, the AI becomes your eyes:
+
+- **Continuous Narration**: Speaks every 3-5 seconds describing what it sees
+- **Smart Glasses Ready**: Designed for integration with smart glasses or handheld cameras
+- **Proactive Not Reactive**: Doesn't wait for questions — actively describes the environment
+- **Safety-First**: Prioritizes hazard warnings and navigates around obstacles
+
+### Priority System
+
+The AI narrates based on what matters most:
+
+1. **Hazards** — Moving vehicles, steps, obstacles, wet floors, low ceilings
+2. **Navigation** — Doors, stairs, crossings, signage, path ahead
+3. **People** — Anyone approaching, their direction and distance
+4. **Text** — Signs, menus, labels, buttons — reads them aloud
+5. **Ambient** — General environment description
+
+### Example Narrations
+
+- *"Stop. There's a step down directly ahead, about half a meter."*
+- *"Someone walking toward you from the left, about 2 meters away."*
+- *"Sign ahead says: Pull. Door says: Staff Only."*
+- *"You're in a corridor, looks clear ahead."*
+
+### Enabling Third Eye
+
+To use Third Eye:
+
+1. Click the mode toggle in the control tray to switch to **Active Mode**
+2. Point your camera at your surroundings
+3. Wear your smart glasses or earbuds for audio feedback
+4. The AI will continuously describe what it sees
 
 ## Usage
   

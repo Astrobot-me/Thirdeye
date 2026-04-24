@@ -289,8 +289,8 @@ function ControlTray({
         return;
       }
 
-      // Only send video frames if in Active mode
-      if (mode === "active" && videoStreamingRef.current) {
+      // Send video frames in both modes (if video stream is active)
+      if (videoStreamingRef.current) {
         const ctx = canvas.getContext("2d")!;
         canvas.width = video.videoWidth * 0.25;
         canvas.height = video.videoHeight * 0.25;
@@ -302,9 +302,9 @@ function ControlTray({
         }
       }
 
-      if (connected) {
-        timeoutId = window.setTimeout(sendVideoFrame, 1000 / 0.5);
-      }
+    if (connected) {
+      timeoutId = window.setTimeout(sendVideoFrame, 1000 / 0.5);
+    }
     }
     if (connected && activeVideoStream !== null) {
       requestAnimationFrame(sendVideoFrame);
@@ -466,3 +466,4 @@ function ControlTray({
 }
 
 export default memo(ControlTray);
+
